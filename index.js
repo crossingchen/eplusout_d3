@@ -76,8 +76,13 @@ var margin = {
   bottom: 30,
   left: 60 }
 
-width = 1200 - margin.left - margin.right,
+width = 1600 - margin.left - margin.right,
 height = 630 - margin.top - margin.bottom;
+let legendWidth = 360;
+let legendSpacing = 4;
+let legendRectSize = 10;
+let scrollWidth = legendWidth - 10;
+let scrollHeight = height;
 
 let xScale = d3.scaleTime()
 let xAxis = d3.axisBottom(xScale)
@@ -108,6 +113,12 @@ attr('height', height + margin.top + margin.bottom).
 attr('class', 'graph').
 append('g').
 attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+svg.append('defs').append('clipPath')
+    .attr('id', 'clip')
+  .append('rect')
+    .attr('width', width - legendWidth) // width of the chart area
+    .attr('height', height); // height of the chart area
 
 // if use json
 // d3.json("data.json").
@@ -147,7 +158,7 @@ then(data => {
   console.log(series)
 
   xScale.domain(d3.extent(data, d => d.timestamp)) // extent returns [min, max] of the provided data
-        .range([0, width]);
+        .range([0, width - legendWidth]);
 
 
 
@@ -221,7 +232,7 @@ then(data => {
       .attr('fill', 'none')
       .attr('stroke', s.color)  // Assuming 'color' is a property of the series
       .attr('stroke-width', 1.5)
-      // .attr('clip-path', 'url(#clip)')
+      .attr('clip-path', 'url(#clip)')
       .attr('d', line)
       .attr('class', 'line');
   });
@@ -236,13 +247,81 @@ then(data => {
 
   // Append a 'rect' to capture the zoom events
   svg.append('rect')
-      .attr('width', width)
+      .attr('width', width - legendWidth)
       .attr('height', height)
       .style('fill', 'none')
       .style('pointer-events', 'all')
       .call(zoom);
 
   // add legend
+  let foreignObject = svg.append("foreignObject")
+    .attr("width", scrollWidth)
+    .attr("height", scrollHeight)
+    .attr('x', width - legendWidth * 0.9);
+
+  // Create a div within the foreignObject
+  let legendDiv = foreignObject.append("xhtml:div")
+      .style("width", scrollWidth + "px")
+      .style("height", scrollHeight + "px")
+      .style("overflow", "scroll");
+
+  // Select all the data items and bind the data
+  let legend = legendDiv.selectAll('.legend')
+      .data(series)
+      .enter()
+      .append('div')
+      .attr('class', 'legend')
+      .attr('transform', function(d, i) { 
+          let height = legendRectSize + legendSpacing;
+          // let offset =  height * series.length / 2;
+          let offset = 0
+          let horz = width - legendWidth * 0.9;
+          let vert = i * height - offset;
+          return 'translate(' + horz + ',' + vert + ')';
+      });
+
+  // Add the colored squares
+  legend.append('svg')
+      .attr('width', legendRectSize)
+      .attr('height', legendRectSize)
+      .append('rect')
+      .attr('width', legendRectSize)
+      .attr('height', legendRectSize)
+      .style('fill', d => d.color)
+      .style('stroke', d => d.color);
+
+  // Add the text labels
+  legend.append('text')
+      .style('font-size', '10px')
+      .style('padding-left', '4px')
+      .text(d => d.name);
+
+  // let legend = svg.selectAll('.legend')  // note that .legend is not a pre-existing class, but is created here
+  //   .data(series)
+  //   .enter()
+  //   .append('g')
+  //   .attr('class', 'legend')
+  //   .attr('transform', function(d, i) { 
+  //       let height = legendRectSize + legendSpacing;
+  //       // let offset =  height * series.length / 2;
+  //       let offset = 0
+  //       let horz = width - legendWidth * 0.9;
+  //       let vert = i * height - offset;
+  //       return 'translate(' + horz + ',' + vert + ')';
+  //   });
+
+  // Add the colored squares
+  // legend.append('rect')
+  //       .attr('width', legendRectSize)
+  //       .attr('height', legendRectSize)
+  //       .style('fill', d => d.color)  // Assuming 'color' is a property of the series
+  //       .style('stroke', d => d.color);
+
+  // legend.append('text')
+  //       .attr('x', legendRectSize + legendSpacing)
+  //       .attr('y', legendRectSize - legendSpacing)
+  //       .style('font-size', '10px')
+  //       .text(d => d.name);  // Assuming 'name' is a property of the series
   // var legendContainer = svg.append('g').attr('id', 'legend');
 
   // var legend = legendContainer
@@ -268,13 +347,8 @@ then(data => {
   // .attr('y', 9)
   // .attr('dy', '.35em')
   // .style('text-anchor', 'end')
-  // .text(function (d) {
-  //   if (d) {
-  //     return 'Riders with doping allegations';
-  //   } else {
-  //     return 'No doping allegations';
-  //   }
-  // });
+  // .text((d) => d.name);
+
 
 
 })
