@@ -40,6 +40,32 @@ function csvToJson(str, delimiter = ",") {
   // return JSON.stringify(dataArray);
 }
 
+function zoomed(event) {
+  let transform = event.transform;
+
+  // Update the scales
+  let updatedXScale = transform.rescaleX(xScale);
+  // If you want to allow zooming on y-axis as well
+  // let updatedYScale = transform.rescaleY(yScale);
+
+  // Update the axes
+  svg.select('.x-axis').call(d3.axisBottom(updatedXScale));
+  // If you want to allow zooming on y-axis as well
+  // svg.select('.y-axis').call(d3.axisLeft(updatedYScale));
+
+  // Update the lines
+  // line.x(d => updatedXScale(d.date));
+  // If you want to allow zooming on y-axis as well
+  // line.y(d => updatedYScale(d.value));
+
+  svg.selectAll('.line')
+      .attr('d', d => line(d.values))
+      .attr('d', line.x(d => updatedXScale(d.date)));
+      // .attr('d', d => line(d.values));
+}
+
+
+
 d3.select('body')
   .append('h1')
   .text('Hello World')
@@ -50,12 +76,20 @@ var margin = {
   bottom: 30,
   left: 60 }
 
-width = 1600 - margin.left - margin.right,
+width = 1200 - margin.left - margin.right,
 height = 630 - margin.top - margin.bottom;
+
+let xScale = d3.scaleTime()
+let xAxis = d3.axisBottom(xScale)
+              .ticks(24)
+              .tickFormat(d3.timeFormat("%m-%d %H-%M"));;
 
 var yScale = d3.scaleLinear().range([0, height]);
 var yAxis = d3.axisLeft(yScale).tickFormat(d3.format('d'));
 var color = d3.scaleOrdinal(d3.schemeCategory10);
+
+let line = d3.line()
+
 // let parseTime = d3.timeParse("%Y-%m-%d-%h");
 // Define the div for the tooltip
 var div = d3.
@@ -111,13 +145,11 @@ then(data => {
     };
   });
   console.log(series)
-  let xScale = d3.scaleTime()
-                 .domain(d3.extent(data, d => d.timestamp)) // extent returns [min, max] of the provided data
-                 .range([0, width]);
 
-  let xAxis = d3.axisBottom(xScale)
-                .ticks(24)
-                .tickFormat(d3.timeFormat("%m-%d %H-%M"));;
+  xScale.domain(d3.extent(data, d => d.timestamp)) // extent returns [min, max] of the provided data
+        .range([0, width]);
+
+
 
 
   // todo how to create the y axis dynamically
@@ -127,7 +159,7 @@ then(data => {
 
   svg
   .append('g')
-  .attr('class', 'x axis')
+  .attr('class', 'x-axis')
   .attr('id', 'x-axis')
   .attr('transform', 'translate(0,' + height + ')')
   .call(xAxis)
@@ -140,7 +172,7 @@ then(data => {
 
   svg
   .append('g')
-  .attr('class', 'y axis')
+  .attr('class', 'y-axis')
   .attr('id', 'y-axis')
   .call(yAxis)
   .append('text')
@@ -179,10 +211,9 @@ then(data => {
   .text("Subtitle");
 
   // add lines
+  line.x(d => xScale(d.date))
+      .y(d => yScale(d.value));
 
-  let line = d3.line()
-    .x(d => xScale(d.date))
-    .y(d => yScale(d.value));
 
   series.forEach(s => {
     svg.append('path')
@@ -190,8 +221,26 @@ then(data => {
       .attr('fill', 'none')
       .attr('stroke', s.color)  // Assuming 'color' is a property of the series
       .attr('stroke-width', 1.5)
-      .attr('d', line);
+      // .attr('clip-path', 'url(#clip)')
+      .attr('d', line)
+      .attr('class', 'line');
   });
+
+  // Set up the zoom behavior
+  let zoom = d3.zoom()
+      .scaleExtent([1, Infinity])
+      // .translateExtent([[0, 0], [width, height]])
+      .translateExtent([[0, 0], [width, 0]]) // restrict vertical translation
+      .extent([[0, 0], [width, height]])
+      .on('zoom', zoomed);
+
+  // Append a 'rect' to capture the zoom events
+  svg.append('rect')
+      .attr('width', width)
+      .attr('height', height)
+      .style('fill', 'none')
+      .style('pointer-events', 'all')
+      .call(zoom);
 
   // add legend
   // var legendContainer = svg.append('g').attr('id', 'legend');
