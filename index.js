@@ -94,6 +94,8 @@ var yAxis = d3.axisLeft(yScale).tickFormat(d3.format('d'));
 var color = d3.scaleOrdinal(d3.schemeCategory10);
 
 let line = d3.line()
+let highlightedLineIndex = null;
+
 
 // let parseTime = d3.timeParse("%Y-%m-%d-%h");
 // Define the div for the tooltip
@@ -160,12 +162,10 @@ then(data => {
   xScale.domain(d3.extent(data, d => d.timestamp)) // extent returns [min, max] of the provided data
         .range([0, width - legendWidth]);
 
-
-
-
   // todo how to create the y axis dynamically
-
-  yScale.domain([0, d3.max(series, s => d3.max(s.values, d => d.value))]) // This should cover all values in your data
+  yScale.domain([
+    0,
+    d3.max(series, s => d3.max(s.values, d => d.value))]) // This should cover all values in your data
   .range([height, 0]);
 
   svg
@@ -222,11 +222,14 @@ then(data => {
   .text("Subtitle");
 
   // add lines
-  line.x(d => xScale(d.date))
+  line.defined(d => !isNaN(d.value)) // added for legend selection
+      .x(d => xScale(d.date))
       .y(d => yScale(d.value));
 
 
-  series.forEach(s => {
+  series.forEach((s, i) => {
+    // console.log(i)
+    s.visible = true
     svg.append('path')
       .datum(s.values)  // Assuming 'values' is the array of data points for this series
       .attr('fill', 'none')
@@ -234,7 +237,7 @@ then(data => {
       .attr('stroke-width', 1.5)
       .attr('clip-path', 'url(#clip)')
       .attr('d', line)
-      .attr('class', 'line');
+      .attr('class', 'line line' + i);
   });
 
   // Set up the zoom behavior
@@ -296,6 +299,111 @@ then(data => {
       .style('padding-left', '4px')
       .text(d => d.name);
 
+  legend.on("click", function(event, d) {
+    let i = series.indexOf(d);
+    console.log(i)
+    // Select the line with the corresponding index
+    let activeLine = svg.select(".line" + i);
+  
+    // Determine if the line is currently visible
+    let isLineActive = activeLine.style("opacity") !== "0";
+  
+    // Hide or show the line depending on its current state
+    activeLine.style("opacity", isLineActive ? "0" : "1");
+
+    d.visible = !isLineActive;
+    // change legend color when clicked
+    let activeLegend = d3.select(this);
+    // activeLegend.select('rect').style("fill", isLineActive ? "lightgrey" : d.color);
+    activeLegend.select('text').style("color", isLineActive ? "lightgrey" : "black");
+
+    let yMin = d3.min(series.filter(s => s.visible), s => d3.min(s.values, d => d.value));
+    let yMax = d3.max(series.filter(s => s.visible), s => d3.max(s.values, d => d.value));
+    yScale.domain([
+      // d3.min(series.filter(s => s.visible), s => d3.min(s.values, d => d.value)),
+      0, // not working yet for negative numbers
+      yMax
+     ]);
+
+    // If the maximum value of the y domain is <= 1, use float format
+    // otherwise use integer format
+    if (yMax <= 1) {
+      yAxis.tickFormat(d3.format(".2f")); // or any other float format you prefer
+    } else {
+      yAxis.tickFormat(d3.format("d"));
+    }
+    
+    line.y(d => yScale(d.value));
+
+    // Redraw the lines
+    svg.selectAll(".line")
+        .attr("d", d => line(d));
+
+    svg.select(".y-axis")
+    .transition()
+    .duration(1000)  // duration of the transition
+    .call(yAxis);
+  });
+
+  legend.on("dblclick", function(event, d) {
+    let i = series.indexOf(d);
+    console.log(highlightedLineIndex)
+    
+    if (i === highlightedLineIndex) {
+      // If the clicked legend's line is already highlighted, restore all lines and legends
+      svg.selectAll(".line").style("opacity", "1");
+      series.forEach(s => s.visible = true);  // All lines are visible
+      // legend.selectAll('rect').style("fill", d => d.color);
+      legend.selectAll('text').style("color", "black");
+
+      highlightedLineIndex = null;
+    } else {
+      // If the clicked legend's line is not already highlighted, highlight it and hide all other lines
+      svg.selectAll(".line").style("opacity", "0");
+      series.forEach(s => s.visible = false);  // All lines are invisible
+      let activeLine = svg.select(".line" + i);
+      activeLine.style("opacity", "1");
+      d.visible = true;  // The active line is visible
+      
+      // legend.selectAll('rect').style("fill", "lightgrey");
+      legend.selectAll('text').style("color", "lightgrey");
+
+      let activeLegend = d3.select(this);
+      // activeLegend.select('rect').style("fill", d.color);
+      activeLegend.select('text').style("color", "black");
+
+      highlightedLineIndex = i;
+    };
+
+    let yMin = d3.min(series.filter(s => s.visible), s => d3.min(s.values, d => d.value));
+    let yMax = d3.max(series.filter(s => s.visible), s => d3.max(s.values, d => d.value));
+
+    yScale.domain([
+      // d3.min(series.filter(s => s.visible), s => d3.min(s.values, d => d.value)),
+      0, // not working yet for negative numbers
+      yMax
+     ]);
+
+    // If the maximum value of the y domain is <= 1, use float format
+    // otherwise use integer format
+    if (yMax <= 1) {
+      yAxis.tickFormat(d3.format(".2f")); // or any other float format you prefer
+    } else {
+      yAxis.tickFormat(d3.format("d"));
+    }
+
+    line.y(d => yScale(d.value));
+
+    // Redraw the lines
+    svg.selectAll(".line")
+        .attr("d", d => line(d));
+
+    // Update the y-axis
+    svg.select(".y-axis")
+       .transition()
+       .duration(1000)  // duration of the transition
+       .call(yAxis);
+  });
   // let legend = svg.selectAll('.legend')  // note that .legend is not a pre-existing class, but is created here
   //   .data(series)
   //   .enter()
